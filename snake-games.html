@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>贪吃蛇游戏</title>
+    <!-- Tailwind CSS CDN for basic styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Inter font for better readability */
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-user-select: none; /* Disable text selection */
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            overflow: hidden; /* Prevent body scrollbars */
+            touch-action: manipulation; /* Allow touch actions without default browser behaviors like zoom */
+        }
+
+        /* Canvas styling */
+        canvas {
+            background-color: #f0f0f0; /* Light grey background for the game area */
+            border: 4px solid #4F46E5; /* Indigo-600 border */
+            border-radius: 0.75rem; /* Rounded corners */
+            display: block; /* Remove extra space below canvas */
+            margin: 0 auto; /* Center the canvas */
+        }
+
+        /* Styling for game over/start message overlays */
+        .game-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background-color: rgba(0, 0, 0, 0.7); /* Semi-transparent black */
+            color: white;
+            border-radius: 0.75rem; /* Match canvas border-radius */
+            z-index: 10; /* Ensure it's above canvas */
+        }
+
+        /* Game Boy D-Pad specific styles */
+        .dpad-container {
+            display: grid;
+            grid-template-areas:
+                ". up ."
+                "left center right"
+                ". down .";
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            width: 150px; /* Fixed width for the D-pad */
+            height: 150px; /* Fixed height for the D-pad */
+            max-width: 150px; /* Ensure it doesn't grow too large on desktop */
+            max-height: 150px;
+            margin: 20px auto; /* Center and add some margin */
+            /* Background for the d-pad base */
+            background-color: #333; /* Dark grey for the base */
+            border-radius: 10px; /* Slightly rounded corners for the base */
+            padding: 10px; /* Padding inside the d-pad container */
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3); /* Soft shadow for depth */
+        }
+
+        .dpad-btn {
+            @apply flex items-center justify-center bg-gray-600 text-white font-bold rounded-md transition duration-100 ease-in-out;
+            border: 2px solid #222; /* Darker border for button separation */
+            font-size: 2rem;
+            line-height: 1; /* Adjust line height for icon centering */
+            width: 100%;
+            height: 100%;
+            box-shadow: inset 0 2px 5px rgba(255,255,255,0.1), inset 0 -2px 5px rgba(0,0,0,0.3); /* Inner shadow for button depth */
+        }
+
+        .dpad-btn:active {
+            @apply bg-gray-700;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.5); /* Pressed state shadow */
+            transform: translateY(1px); /* Slight press effect */
+        }
+
+        #upBtn { grid-area: up; }
+        #downBtn { grid-area: down; }
+        #leftBtn { grid-area: left; }
+        #rightBtn { grid-area: right; }
+        .dpad-center {
+            grid-area: center;
+            background-color: #444; /* Slightly lighter center */
+            border-radius: 50%; /* Make center round */
+            width: 80%; /* Smaller center circle */
+            height: 80%;
+            justify-self: center;
+            align-self: center;
+            border: 2px solid #222;
+        }
+
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-50 to-purple-100 min-h-screen flex flex-col items-center justify-center p-4">
+    <div class="flex flex-col items-center justify-center bg-white shadow-2xl rounded-2xl p-6 sm:p-8 max-w-lg w-full border-4 border-purple-300 relative overflow-hidden">
+        <h1 class="text-4xl sm:text-5xl font-extrabold text-gray-800 text-center mb-4 leading-tight">贪吃蛇</h1>
+
+        <div class="flex justify-between w-full text-lg sm:text-xl font-semibold text-gray-700 mb-6">
+            <span>分数: <span id="score">0</span></span>
+            <span>最高分: <span id="highScore">0</span></span>
+        </div>
+
+        <div class="relative w-full aspect-square max-w-sm">
+            <canvas id="gameCanvas" class="absolute inset-0"></canvas>
+            
+            <!-- Start Screen Overlay -->
+            <div id="startScreen" class="game-overlay">
+                <p class="text-3xl sm:text-4xl font-bold mb-4 text-center">点击开始游戏</p>
+                <button id="startButton" class="bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-bold py-3 px-8 rounded-full shadow-lg text-xl sm:text-2xl transition duration-200">
+                    开始游戏
+                </button>
+                <p class="text-base sm:text-lg mt-4 text-center">使用方向键或 WASD 键控制</p>
+            </div>
+
+            <!-- Game Over Screen Overlay -->
+            <div id="gameOverScreen" class="game-overlay hidden">
+                <p class="text-3xl sm:text-4xl font-bold mb-4 text-center">游戏结束！</p>
+                <p class="text-xl sm:text-2xl mb-6">最终分数: <span id="finalScore">0</span></p>
+                <button id="restartButton" class="bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-bold py-3 px-8 rounded-full shadow-lg text-xl sm:text-2xl transition duration-200">
+                    再玩一次
+                </button>
+            </div>
+        </div>
+
+        <!-- Game Boy style D-Pad controls -->
+        <div class="dpad-container">
+            <button id="upBtn" class="dpad-btn">↑</button>
+            <button id="leftBtn" class="dpad-btn">←</button>
+            <div class="dpad-center"></div> <!-- Decorative center piece -->
+            <button id="rightBtn" class="dpad-btn">→</button>
+            <button id="downBtn" class="dpad-btn">↓</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score');
+        const highScoreDisplay = document.getElementById('highScore');
+        const startScreen = document.getElementById('startScreen');
+        const startButton = document.getElementById('startButton');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const restartButton = document.getElementById('restartButton');
+
+        // Control buttons
+        const upBtn = document.getElementById('upBtn');
+        const downBtn = document.getElementById('downBtn');
+        const leftBtn = document.getElementById('leftBtn');
+        const rightBtn = document.getElementById('rightBtn');
+
+        const gridSize = 20; // Size of each segment of the snake and food
+        let tileCountX; // Number of tiles horizontally
+        let tileCountY; // Number of tiles vertically
+
+        let snake = []; // Snake position, initialized in startGame
+        let food = {}; // Food position
+        let dx = 0; // Horizontal velocity
+        let dy = 0; // Vertical velocity (1 for down, -1 for up)
+        let score = 0;
+        let highScore = localStorage.getItem('snakeHighScore') || 0; // Load high score from local storage
+        let gameInterval;
+        let gameSpeed = 150; // Milliseconds per frame
+        let gameActive = false; // Game active flag
+        let changingDirection = false; // Flag to prevent multiple direction changes per frame
+
+        // New game variables for scoring and win condition
+        const MAX_FOOD_EATEN = 5; // Total food allowed
+        let foodEatenCount = 0; // Counter for food eaten
+
+        // Initialize canvas size and tile counts
+        function setCanvasSize() {
+            // Set canvas width to fill its parent div's max-width, make it square
+            const parentContainer = canvas.parentElement;
+            canvas.width = parentContainer.offsetWidth;
+            canvas.height = parentContainer.offsetWidth; // Make it square
+
+            tileCountX = Math.floor(canvas.width / gridSize);
+            tileCountY = Math.floor(canvas.height / gridSize);
+
+            // Re-draw game elements if active and canvas size changed
+            if (gameActive) {
+                // If the game is running and canvas resizes, we might need to reset snake position
+                // to prevent it going out of bounds or behaving unexpectedly.
+                // For simplicity, we just restart the game visually if active during resize.
+                // A more robust solution might scale coordinates or prevent resizing during play.
+                snake = [{ x: Math.floor(tileCountX / 2), y: Math.floor(tileCountY / 2) }];
+                dx = 1; // Default starting direction
+                dy = 0;
+                generateFood();
+                drawGame();
+            } else {
+                drawGame(); // Just draw the background grid if game isn't active
+            }
+        }
+
+        // Set initial canvas size and update on resize
+        window.addEventListener('resize', setCanvasSize);
+        window.onload = () => {
+            setCanvasSize(); // Call once on load to set initial size
+            highScoreDisplay.textContent = highScore;
+        };
+
+        // Generate random food position
+        function generateFood() {
+            food = {
+                x: Math.floor(Math.random() * tileCountX),
+                y: Math.floor(Math.random() * tileCountY)
+            };
+
+            // Ensure food doesn't spawn on the snake
+            for (let i = 0; i < snake.length; i++) {
+                if (snake[i].x === food.x && snake[i].y === food.y) {
+                    generateFood(); // Recalculate if it spawns on snake
+                    return;
+                }
+            }
+        }
+
+        // Draw everything on the canvas
+        function drawGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear canvas
+
+            // Draw snake
+            ctx.fillStyle = '#22C55E'; // Green-500
+            ctx.strokeStyle = '#16A34A'; // Green-600
+            for (let i = 0; i < snake.length; i++) {
+                ctx.fillRect(snake[i].x * gridSize, snake[i].y * gridSize, gridSize - 1, gridSize - 1);
+                ctx.strokeRect(snake[i].x * gridSize, snake[i].y * gridSize, gridSize - 1, gridSize - 1);
+            }
+
+            // Draw food
+            ctx.fillStyle = '#EF4444'; // Red-500
+            ctx.strokeStyle = '#DC2626'; // Red-600
+            ctx.fillRect(food.x * gridSize, food.y * gridSize, gridSize - 1, gridSize - 1);
+            ctx.strokeRect(food.x * gridSize, food.y * gridSize, gridSize - 1, gridSize - 1);
+        }
+
+        // Update snake position and check collisions
+        function updateGame() {
+            if (!gameActive) return;
+
+            changingDirection = false; // Reset flag for new frame
+
+            const head = { x: snake[0].x + dx, y: snake[0].y + dy };
+
+            // Check for wall collision
+            if (head.x < 0 || head.x >= tileCountX || head.y < 0 || head.y >= tileCountY) {
+                gameOver("游戏结束！"); // Pass message for collision
+                return;
+            }
+
+            // Check for self-collision (start from 4th segment to avoid immediate self-collision)
+            for (let i = 4; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    gameOver("游戏结束！"); // Pass message for self-collision
+                    return;
+                }
+            }
+
+            snake.unshift(head); // Add new head
+
+            // Check if snake eats food
+            if (head.x === food.x && head.y === food.y) {
+                foodEatenCount++; // Increment count of food eaten
+
+                if (foodEatenCount < MAX_FOOD_EATEN) {
+                    score += 100; // 100 points for first MAX_FOOD_EATEN-1 foods
+                } else if (foodEatenCount === MAX_FOOD_EATEN) {
+                    score += 120; // 120 points for the last food
+                }
+                
+                scoreDisplay.textContent = score;
+                
+                if (foodEatenCount === MAX_FOOD_EATEN) {
+                    gameOver("我爱你 宝贝"); // If MAX_FOOD_EATEN foods are eaten, trigger win condition with custom message
+                    return; // Exit updateGame
+                }
+
+                generateFood(); // Generate new food for subsequent plays (up to MAX_FOOD_EATEN)
+                // Speed increase logic remains, but only if game continues
+                gameSpeed = Math.max(50, gameSpeed - 5); 
+                clearInterval(gameInterval);
+                gameInterval = setInterval(updateGame, gameSpeed);
+            } else {
+                snake.pop(); // Remove tail if no food eaten
+            }
+
+            drawGame();
+        }
+
+        // Game over function (now takes a message parameter)
+        function gameOver(message) {
+            gameActive = false;
+            clearInterval(gameInterval); // Stop game loop
+
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('snakeHighScore', highScore); // Save new high score
+                highScoreDisplay.textContent = highScore;
+            }
+
+            finalScoreDisplay.textContent = score;
+            gameOverScreen.querySelector('p:first-child').textContent = message; // Set custom message
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        // Start new game
+        function startGame() {
+            score = 0;
+            foodEatenCount = 0; // Reset food counter for new game
+            scoreDisplay.textContent = score;
+            snake = [{ x: Math.floor(tileCountX / 2), y: Math.floor(tileCountY / 2) }]; // Center snake
+            dx = 1; // Start moving right automatically
+            dy = 0;
+            gameSpeed = 150; // Reset speed
+            generateFood();
+            
+            startScreen.classList.add('hidden'); // Hide start screen
+            gameOverScreen.classList.add('hidden'); // Hide game over screen
+            
+            // Reset game over message to default in case it was "我爱你 宝贝" from previous game
+            gameOverScreen.querySelector('p:first-child').textContent = "游戏结束！"; 
+
+            gameActive = true;
+            // Draw initial snake and food immediately before starting interval
+            drawGame(); 
+            gameInterval = setInterval(updateGame, gameSpeed);
+        }
+
+        // Function to handle direction change based on input
+        function changeDirection(newDx, newDy) {
+            if (changingDirection || !gameActive) return; // Prevent multiple changes per frame or if game not active
+            changingDirection = true;
+
+            const goingUp = dy === -1;
+            const goingDown = dy === 1;
+            const goingLeft = dx === -1;
+            const goingRight = dx === 1;
+
+            // Only allow change if not immediately reversing direction
+            if (newDx === -1 && !goingRight) { // Left
+                dx = -1; dy = 0;
+            } else if (newDx === 1 && !goingLeft) { // Right
+                dx = 1; dy = 0;
+            } else if (newDy === -1 && !goingDown) { // Up
+                dx = 0; dy = -1;
+            } else if (newDy === 1 && !goingUp) { // Down
+                dx = 0; dy = 1;
+            }
+        }
+
+
+        // Event listeners for keyboard input
+        document.addEventListener('keydown', e => {
+            const keyPressed = e.key;
+            if (keyPressed === 'ArrowLeft' || keyPressed === 'a') {
+                changeDirection(-1, 0);
+            } else if (keyPressed === 'ArrowUp' || keyPressed === 'w') {
+                changeDirection(0, -1);
+            } else if (keyPressed === 'ArrowRight' || keyPressed === 'd') {
+                changeDirection(1, 0);
+            } else if (keyPressed === 'ArrowDown' || keyPressed === 's') {
+                changeDirection(0, 1);
+            }
+        });
+
+        // Event listeners for D-Pad buttons
+        upBtn.addEventListener('click', () => changeDirection(0, -1));
+        downBtn.addEventListener('click', () => changeDirection(0, 1));
+        leftBtn.addEventListener('click', () => changeDirection(-1, 0));
+        rightBtn.addEventListener('click', () => changeDirection(1, 0));
+
+        // Start/Restart button listeners
+        startButton.addEventListener('click', startGame);
+        restartButton.addEventListener('click', startGame);
+    </script>
+</body>
+</html>

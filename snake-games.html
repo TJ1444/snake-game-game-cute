@@ -286,7 +286,7 @@
 
                 generateFood(); // Generate new food for subsequent plays (up to MAX_FOOD_EATEN)
                 // Speed increase logic remains, but only if game continues
-                gameSpeed = Math.max(50, gameSpeed - 5); 
+                gameSpeed = Math.max(25, gameSpeed - 5); 
                 clearInterval(gameInterval);
                 gameInterval = setInterval(updateGame, gameSpeed);
             } else {
